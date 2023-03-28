@@ -4,8 +4,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-volatile int current_sig = 2;
-
 void confirm_signal(int sign) {
     printf(">>>SENDER: catcher has received and processed signal\n");
 }
@@ -24,8 +22,8 @@ void send_to_catcher(pid_t catcher_pid, int mode) {
     sigaddset(&newmask, SIGUSR1);
     sigprocmask(SIG_BLOCK, &newmask, &oldmask);
 
-    kill(catcher_pid, SIGUSR1);
-//    sigqueue(catcher_pid, SIGUSR1, sig_val);
+    //kill(catcher_pid, SIGUSR1);
+    sigqueue(catcher_pid, SIGUSR1, sig_val);
     printf(">>>SENDER: Signal was sent\n");
 
     sigsuspend(&oldmask);
