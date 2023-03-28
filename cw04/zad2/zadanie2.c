@@ -8,7 +8,7 @@ int id = 0;
 #define DEPTH_LIMIT 5
 
 void info_handler(int sign , siginfo_t *info, void *p3 ) {
-    printf("Signal number: %d, PID: %d\n", info->si_signo, info->si_pid);
+    printf("Signal info -> number: %d, PID: %d\n", info->si_signo, info->si_pid);
 }
 
 void depth_handler(int sign , siginfo_t *info, void *p3 ) {
@@ -22,7 +22,15 @@ void depth_handler(int sign , siginfo_t *info, void *p3 ) {
     }
     depth--;
     printf("OUT ->  ID : %d , DEPTH: %d\n", current, depth);
+    printf("Signal info -> number: %d, PID: %d\n", info->si_signo, info->si_pid);
+}
+void basic_handler(int sign) {
+    printf("Signal %d was received\n", sign);
+}
+
+void reset_handler(int sign , siginfo_t *info, void *p3) {
     printf("Signal info -> signal number: %d, PID: %d\n", info->si_signo, info->si_pid);
+    printf("Signal handler was reset\n");
 }
 
 void install_handler(void (*handler)(int, siginfo_t*, void*), int sign , int flag){
@@ -43,11 +51,12 @@ int main(void) {
     printf("SA_NODEFER TEST\n");
     raise(SIGUSR1);
 
-//    install_handler(depth_handler , SIGUSR1 , SA_RESETHAND);
-//    printf("SA_RESETHAND TEST\n");
-//    raise(SIGUSR1);
+    install_handler(reset_handler , SIGUSR1 , SA_RESETHAND);
+    printf("SA_RESETHAND TEST\n");
 
-
+    raise(SIGUSR1);
+    signal(SIGUSR1, basic_handler);
+    raise(SIGUSR1);
 
     return 0;
 }
