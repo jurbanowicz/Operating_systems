@@ -22,6 +22,7 @@ void test_fork(int val) {
             if (pid == 0){
                 printf("SIGUSR1 sent by child process\n");
                 raise(SIGUSR1);
+                exit(0);
             }
             break;
 
@@ -34,6 +35,7 @@ void test_fork(int val) {
             if (pid == 0){
                 printf("SIGUSR1 sent by child process\n");
                 raise(SIGUSR1);
+                exit(0);
             }
             break;
 
@@ -49,6 +51,7 @@ void test_fork(int val) {
             if (pid == 0) {
                 raise(SIGUSR1);
                 printf("SIGUSR1 sent by child process\n");
+                exit(0);
             }
             break;
 
@@ -75,6 +78,7 @@ void test_fork(int val) {
                 } else {
                     printf("SIGUSR1 is NOT pending in child process\n");
                 }
+                exit(0);
             }
             break;
 
@@ -103,6 +107,12 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "pending") == 0) val = 3;
 
     test_fork(val);
+
+    while (wait(NULL) > 0);
+
+    printf("TESTING EXEC: \n");
+
+    execl("./exec_test", "./exec_test", argv[1], NULL);
 
     return 0;
 }

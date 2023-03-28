@@ -3,6 +3,7 @@ CFLAGS = -Wall
 
 all:
 	$(CC) $(CFLAGS) zadanie1.c -o zadanie1
+	$(CC) $(CFLAGS) exec_test.c -o exec_test
 
 test: all
 	@echo "TESTING ignore \n-------------"

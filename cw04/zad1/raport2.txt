@@ -1,0 +1,4 @@
+Ignore - sygnał jest ignorowany przez rodzica, dziecko oraz po wykonaniu funckji exec
+Handler - sygnał jest właściwe obsłużony przez rodzica i dziecko
+Mask - sygnał jest maskowany we wszystkich trzech przypadkach
+Pending - sygnał jest widoczny w rodzicu oraz po wykonaniu funckji exec ale nie jest widoczny przez dziecko

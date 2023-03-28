@@ -10,8 +10,9 @@ void confirm_signal(int sign) {
 
 void send_to_catcher(pid_t catcher_pid, int mode) {
     sigset_t set;
-    union sigval sig_val;
-    sig_val.sival_int = mode;
+//    union sigval sig_val;
+//    sig_val.si = mode;
+    sigval_t sig_val = {mode};
     sigemptyset(&set);
     sigaddset(&set, SIGUSR1);
 
