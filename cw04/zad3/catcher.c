@@ -23,7 +23,7 @@ void get_current_time() {
 }
 
 void get_requests_num(){
-    printf(">>>CATCHER: Numebr of requests received: %d\n", requests_no);
+    printf(">>>CATCHER: Number of requests received: %d\n", requests_no);
 }
 
 void get_time_loop() {
