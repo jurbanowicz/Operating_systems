@@ -14,3 +14,6 @@ test: all
 	./zadanie1 "mask"
 	@echo "\nTESTING pending\n-------------"
 	./zadanie1 "pending"
+
+clean:
+	rm exec_test zadanie1

@@ -5,4 +5,5 @@ all:
 	$(CC) $(CFLAGS) catcher.c -o catcher
 	$(CC) $(CFLAGS) sender.c -o sender
 
-test: all
+clean:
+	rm catcher sender

@@ -6,3 +6,6 @@ all:
 
 test: all
 	./zadanie2
+
+clean:
+	rm zadanie2
