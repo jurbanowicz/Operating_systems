@@ -6,18 +6,16 @@
 #include <sys/msg.h>
 
 
-#define HOME_PATH getenv("~")
+#define HOME_PATH getenv("HOME")
 #define SERVER_ID 1
 #define CLIENTS_LIMIT 10
 #define MESSAGE_LEN_LIMIT 512
 
-
-
 typedef struct MessageBuffer {
+    long type;
     key_t queue_key;
     int client_id;
     int other_id;
-    long type;
     char content[MESSAGE_LEN_LIMIT];
     struct tm time_struct;
 } MessageBuffer;

@@ -4,6 +4,7 @@
 #include <time.h>
 #include <signal.h>
 #include <sys/msg.h>
+#include <unistd.h>
 
 #include "common.h"
 
@@ -11,6 +12,7 @@ key_t queue_key;
 int client_queue_id;
 int server_queue_id;
 int client_id;
+
 
 int handle_init();
 void handle_list();
@@ -23,10 +25,14 @@ int main(void) {
 
     srand(time(NULL));
 
-    queue_key = ftok(HOME_PATH, rand() % 255 + 1);
-    client_queue_id = msgget(queue_key, IPC_CREAT | 0666);
-    key_t server_key = ftok(HOME_PATH, SERVER_ID);
-    server_queue_id = msgget(server_key, 0);
+    char cwd[256];
+    getcwd(cwd, sizeof (cwd));
+
+    queue_key = ftok(cwd, getpid());
+    client_queue_id = msgget(queue_key, IPC_CREAT | 0600);
+    key_t server_key = ftok(cwd, SERVER_ID);
+    server_queue_id = msgget(server_key, 0600);
+
     client_id = handle_init();
 
     signal(SIGINT, handle_stop);
@@ -36,6 +42,7 @@ int main(void) {
     char *command = NULL;
 
     printf("Client initialized, id: %d\n", client_id);
+
     while (1) {
         printf("Enter command: ");
         read = getline(&command, &len, stdin);
@@ -48,10 +55,8 @@ int main(void) {
             continue;
         }
 
-
         char *current_command = strtok(command, " ");
 
-        printf("CURRENT COMMAND: %s\n", current_command);
         if (strcmp(current_command, "LIST") == 0) {
             handle_list();
         }
@@ -75,21 +80,21 @@ int main(void) {
 
 int handle_init() {
     time_t current_time = time(NULL);
-    MessageBuffer *messageBuffer = malloc(sizeof (MessageBuffer));
+    MessageBuffer messageBuffer;
 
-    messageBuffer->time_struct = *localtime(&current_time);
-    messageBuffer->type = INIT;
-    messageBuffer->queue_key = queue_key;
+    messageBuffer.time_struct = *localtime(&current_time);
+    messageBuffer.type = INIT;
+    messageBuffer.queue_key = queue_key;
 
-    msgsnd(server_queue_id, messageBuffer, MESSAGE_SIZE, 0);
-    msgrcv(client_queue_id, messageBuffer, MESSAGE_SIZE, 0, 0);
+    msgsnd(server_queue_id, &messageBuffer, MESSAGE_SIZE, 0);
+    printf("WAITING FOR SERVER MESSAGE\n");
+    msgrcv(client_queue_id, &messageBuffer, MESSAGE_SIZE, 0, 0);
 
-    int current_id = messageBuffer->client_id;
+    int current_id = messageBuffer.client_id;
     if (current_id == -1) {
         printf("Client limit reached, exiting! \n");
         exit(0);
     }
-
     return current_id;
 }
 void handle_list() {
@@ -102,8 +107,8 @@ void handle_list() {
 
     msgsnd(server_queue_id, messageBuffer, MESSAGE_SIZE, 0);
     msgrcv(client_queue_id, messageBuffer, MESSAGE_SIZE, 0, 0);
-
     printf("Message from server: %s\n", messageBuffer->content);
+    free(messageBuffer);
 }
 void handle_to_all(char* message) {
     time_t current_time = time(NULL);
@@ -115,6 +120,7 @@ void handle_to_all(char* message) {
     strcpy(messageBuffer->content, message);
 
     msgsnd(server_queue_id, messageBuffer, MESSAGE_SIZE, 0);
+    free(messageBuffer);
 }
 void handle_to_one(char* message, int other_id) {
     time_t current_time = time(NULL);
@@ -127,6 +133,7 @@ void handle_to_one(char* message, int other_id) {
     strcpy(messageBuffer->content, message);
 
     msgsnd(server_queue_id, messageBuffer, MESSAGE_SIZE, 0);
+    free(messageBuffer);
 }
 void handle_stop() {
     time_t current_time = time(NULL);
@@ -138,6 +145,7 @@ void handle_stop() {
 
     msgsnd(server_queue_id, messageBuffer, MESSAGE_SIZE, 0);
     msgctl(client_queue_id, IPC_RMID, NULL);
+    free(messageBuffer);
     exit(0);
 }
 void handle_server_message() {
@@ -158,5 +166,6 @@ void handle_server_message() {
                    messageBuffer->content);
         }
     }
+    free(messageBuffer);
 }
 
