@@ -1,0 +1,10 @@
+RESULT: 3.141592, DX: 0.0000000100 n-processes: 2, TOTAL TIME: 0.223676
+RESULT: 3.141593, DX: 0.0000000100 n-processes: 4, TOTAL TIME: 0.098928
+RESULT: 3.141594, DX: 0.0000000100 n-processes: 8, TOTAL TIME: 0.067203
+RESULT: 3.141593, DX: 0.0000000100 n-processes: 16, TOTAL TIME: 0.071144
+RESULT: 3.141592, DX: 0.0000000001 n-processes: 2, TOTAL TIME: 19.026895
+RESULT: 3.141593, DX: 0.0000000001 n-processes: 4, TOTAL TIME: 10.405841
+RESULT: 3.141594, DX: 0.0000000001 n-processes: 8, TOTAL TIME: 8.269682
+RESULT: 3.141593, DX: 0.0000000001 n-processes: 16, TOTAL TIME: 8.733309
+
+Dla podziału na 8 procesów możemy zauważyć najlepsze wyniki czsowe dla programu. Jest to związane z faktem że obliczenia zostały wykonane na maszynie z 8 rdzeniami CPU
