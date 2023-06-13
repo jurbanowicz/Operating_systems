@@ -53,7 +53,6 @@ int main(void) {
 
     install_handler(reset_handler , SIGUSR1 , SA_RESETHAND);
     printf("SA_RESETHAND TEST\n");
-
     raise(SIGUSR1);
     signal(SIGUSR1, basic_handler);
     raise(SIGUSR1);

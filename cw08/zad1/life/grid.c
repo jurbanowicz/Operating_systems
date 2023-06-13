@@ -126,7 +126,7 @@ void init_threads(int n, char* src, char*dst) {
     int fields_for_thread = grid_len / n;
     int leftover = grid_len % n;
 
-    for (int i = 0; i < grid_len - leftover; i += fields_for_thread) {
+    for (int i = 0; i < fields_for_thread - leftover; i += fields_for_thread) {
         thread_args *args = malloc(sizeof (thread_args));
         int row = i % grid_height;
         int col = i / grid_height;
@@ -136,7 +136,7 @@ void init_threads(int n, char* src, char*dst) {
         args->src = src;
         args->dst = dst;
     }
-    for (int i = grid_len - leftover; i < grid_len; i += (fields_for_thread + 1)) {
+    for (int i = fields_for_thread - leftover; i < grid_len; i += (fields_for_thread + 1)) {
         thread_args *args = malloc(sizeof (thread_args));
         int row = i % grid_height;
         int col = i % grid_width;
