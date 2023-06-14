@@ -1,32 +1,66 @@
-#include <fcntl.h>
-#include <unistd.h>
-
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/un.h>
-
-#include <sys/epoll.h>
-
 #include <stdio.h>
-#include <errno.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <stdlib.h>
-#include <stdbool.h>
+#include <stdarg.h>
 #include <signal.h>
+#include <pthread.h>
 
-#define safe(expr)                                                              \
-  ({                                                                            \
-    typeof(expr) __tmp = expr;                                                  \
-    if (__tmp == -1) {                                                          \
-      printf("%s:%d "#expr" failed: %s\n", __FILE__, __LINE__, strerror(errno));\
-      exit(EXIT_FAILURE);                                                       \
-    }                                                                           \
-    __tmp;                                                                      \
-  })
-#define loop for(;;)
-#define find(init, cond) ({ int index = -1;  for (init) if (cond) { index = i; break; } index; })
-#define repeat(n) for(int i = 0; i < n; i++)
-#define print(x) write(STDOUT_FILENO, x, sizeof(x))
+#define MAX_MESSAGE_SIZE 512
+
+typedef enum MessageType {
+  STOP = 1,
+  LIST = 2,
+  TO_ONE = 3,
+  TO_ALL = 4,
+  INIT = 5,
+  PING = 6
+} MessageType;
+
+typedef struct Message {
+  MessageType msg_type;
+  int from_id, to_id;
+  char msg_text[MAX_MESSAGE_SIZE];
+  int client_id;
+  char date[MAX_MESSAGE_SIZE];
+  char client_name[MAX_MESSAGE_SIZE];
+} Message;
+
+
+typedef struct ClientThreadArgs {
+  int client_id;
+  int socket_no;
+} ClientThreadArgs;
+
+typedef enum ClientCommand
+{
+    COMMAND_LIST,
+    COMMAND_2ALL,
+    COMMAND_2ONE,
+    COMMAND_STOP,
+    COMMAND_INVALID,
+    COMMAND_HELP
+} CleintCommand;
+
+char *get_message_type(MessageType type) {
+  switch (type)
+  {
+  case STOP:
+    return "STOP";
+  case LIST:
+    return "LSIT";
+  case TO_ONE:
+    return "TO_ONE";
+  case TO_ALL:
+    return "TO_ALL";
+  case INIT:
+    return "INIT";
+  case PING:
+    return "PING";
+  default:
+    return "WRONG MESSAGE TYPE";
+  }
+}

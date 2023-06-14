@@ -1,179 +1,198 @@
 #include "common.h"
-#include "message.h"
-
-int _;
-
-int connect_unix(char* path) {
-  struct sockaddr_un addr;
-  memset(&addr, 0, sizeof(addr));
-  addr.sun_family = AF_UNIX;
-  strncpy(addr.sun_path, path, sizeof addr.sun_path -1);
-
-  int sock = safe (socket(AF_UNIX, SOCK_STREAM, 0));
-  safe (connect(sock, (struct sockaddr*) &addr, sizeof addr));
-
-  return sock;
-}
-
-int connect_web(char* ipv4, int port) {
-  struct sockaddr_in addr;
-  memset(&addr, 0, sizeof(addr));
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(port);
-  if (inet_pton(AF_INET, ipv4, &addr.sin_addr) <= 0) {
-    puts("Invalid address\n");
-    exit(0);
-  }
-
-  int sock = safe (socket(AF_INET, SOCK_STREAM, 0));
-  safe (connect(sock, (struct sockaddr*) &addr, sizeof addr));
-   
-  return sock;
-}
-
-int sock;
-void on_SIGINT(int _) {
-  message msg = { .type = msg_disconnect };
-  _ = write(sock, &msg, sizeof msg);
-  exit(0);
-}
-
-int main(int argc, char** argv) {
-  if (strcmp(argv[2], "web") == 0 && argc == 5) sock = connect_web(argv[3], atoi(argv[4]));
-  else if (strcmp(argv[2], "unix") == 0 && argc == 4) sock = connect_unix(argv[3]);
-  else {
-    puts("Usage [nick] [web|unix] [ip port|path]\n");
-    exit(0);
-  }
-
-  signal(SIGINT, on_SIGINT);
-  char* nickname = argv[1];
-  _ = write(sock, nickname, strlen(nickname));
-  
-  int epoll_fd = safe (epoll_create1(0));
-  
-  struct epoll_event stdin_event = { 
-    .events = EPOLLIN | EPOLLPRI,
-    .data = { .fd = STDIN_FILENO }
-  };
-  epoll_ctl(epoll_fd, EPOLL_CTL_ADD, STDIN_FILENO, &stdin_event);
-
-  struct epoll_event socket_event = { 
-    .events = EPOLLIN | EPOLLPRI | EPOLLHUP,
-    .data = { .fd = sock }
-  };
-  epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock, &socket_event);
-
-  struct epoll_event events[2];
-  loop {
-    int nread = safe (epoll_wait(epoll_fd, events, 2, 1));
-    repeat(nread) {
-      if (events[i].data.fd == STDIN_FILENO) {
-        // puts("got stdin");
-        // fflush(NULL);
-
-        char buffer[512] = {};
-
-        // POWAŻNY PARSER
-
-        int x = read(STDIN_FILENO, &buffer, 512);
-        buffer[x] = 0;
-
-        char korektor[] = " \t\n";
-        char *token;
-        int idx = 0;
-        token = strtok( buffer, korektor );
-
-        message_type type = -1;
-        char other_nickname[MSG_LEN] = {};
-        char text[MSG_LEN] = {};
-
-        bool broke = false;
-
-        if (token == NULL)
-          continue;
-
-        while( token != NULL ) {
-            // puts("TOKEN:");
-            // puts(token);
-            // fflush(NULL);
-            
-            switch (idx) {
-              case 0:
-                if (strcmp(token, "LIST") == 0) type = msg_list;
-                else if (strcmp(token, "2ALL") == 0) type = msg_tall;
-                else if (strcmp(token, "2ONE") == 0) type = msg_tone;
-                else if (strcmp(token, "STOP") == 0) type = msg_stop;
-                else {
-                  broke = true;
-                  puts("Invalid command");
-                  type = -1;
-                }
-                break;
-              case 1:
-                memcpy(text, token, strlen(token)*sizeof(char));
-                text[strlen(token)] = 0;
-                break;
-              case 2:
-                memcpy(other_nickname, token, strlen(token)*sizeof(char));
-                other_nickname[strlen(token)] = 0;
-                break;
-              case 3:
-                broke = true;
-                break;
-            }
-
-            if (broke)
-              break;
-
-            idx++;
-            token = strtok( NULL, korektor );
-        }
-        if (broke)
-          continue;
-
-        // puts("parsed");
-        // fflush(NULL);
-
-        message msg;
-        msg.type = type;
-        memcpy(&msg.other_nickname, other_nickname, strlen(other_nickname)+1);
-        memcpy(&msg.text, text, strlen(text)+1);
-
-        _ = write(sock, &msg, sizeof msg);
-        ///
 
 
+static int socket_1;
+static int client_id;
+static int is_accepted = 0;
+static int port_no;
+char* ip_adress;
+char* name;
 
-      } else { // TODO(rad)
-        // puts("got msg");
-        // fflush(NULL);
-        message msg;
-        _ = read(sock, &msg, sizeof msg);
+int create_socket_client(int type, in_addr_t addr_t)
+{
+    int main_socket;
+    struct sockaddr_in ser;
+    memset(&ser, 0, sizeof(struct sockaddr_in));
+    ser.sin_family = AF_INET;
+    ser.sin_port = htons(port_no);
+    ser.sin_addr.s_addr = addr_t;
 
-        if (msg.type == msg_username_taken) {
-          puts("This username is already taken\n");
-          close(sock);
-          exit(0);
-        } else if (msg.type == msg_server_full) {
-          puts("Server is full\n");
-          close(sock);
-          exit(0);
-        } else if (events[i].events & EPOLLHUP) {
-          puts("Disconnected\n");
-          exit(0);
-        } else if (msg.type == msg_ping) {
-          _ = write(sock, &msg, sizeof msg);
-        } else if (msg.type == msg_stop) {
-          puts("Stopping\n");
-          close(sock);
-          exit(0);
-        } else if (msg.type == msg_get) {
-          puts(msg.text);
-        }
-      }
-
-
+    main_socket = socket(AF_INET, type, 0);
+    if (main_socket == -1)
+    {
+        fprintf(stderr, "Error creating a socket\n");
+        return -1;
     }
-  }
+    int status = connect(main_socket, (struct sockaddr *)&ser, sizeof ser);
+    if (status < 0)
+    {
+        fprintf(stderr, "Error conecting the socket\n");
+        return 0;
+    }
+    return main_socket;
+}
+
+ClientCommand get_user_command(char *buff)
+{
+    fgets(buff, MAX_MESSAGE_SIZE, stdin);
+    buff[strlen(buff) - 1] = '\0';
+    if (strcmp(buff, "LIST") == 0) { return COMMAND_LIST; }
+    if (strcmp(buff, "STOP") == 0) { return COMMAND_STOP; }
+    if (strcmp(buff, "HELP") == 0) { return COMMAND_HELP; }
+    if (strncmp(buff, "2ALL ", strlen("2ALL ")) == 0) { return COMMAND_2ALL; }
+    if (strncmp(buff, "2ONE ", strlen("2ONE ")) == 0) { return COMMAND_2ONE; }
+
+    return COMMAND_INVALID;
+}
+
+void print_help()
+{
+    printf("Available commands:\n");
+    printf("'LIST' -> lists users currently connected to the server\n");
+    printf("'STOP' -> logs out from the server and stops the current program\n");
+    printf("'2ONE [id] [message]' -> sends [message] to client with given [id]\n");
+    printf("'2ALL [message]' -> sends [message] to all users\n");
+}
+
+void my_exit() {
+    close(socket_1);
+}
+
+void send_message(MessageType type, char *text, int to_id) {
+    Message msg;
+    msg.from_id = clientID;
+    msg.msg_type = type;
+    msg.to_id = to_id;
+    strcpy(msg.client_name, name);
+    strcpy(msg.msg_text, text);
+    write(socket_1, &msg, sizeof(Message));
+}
+
+void signal_handler(int signo) {
+    Message msg;
+    msg.type = STOP;
+    write(socket_1, &msg, sizeof(Message));
+    printf("User logging out...\n");
+    exit(0);
+}
+
+void *client_thread_handler(void *arg) {
+    int status;
+    Message msg;
+    while (1)
+    {
+        status = read(socket_1, &msg, sizeof(Message));
+        if (status <= 0)
+        {
+            printf("Server not responding...\nClosing programe\n");
+            exit(0);
+        }
+        switch (msg.type)
+        {
+        case INIT:
+            client_id = msg.intValue;
+            is_accepted = 1;
+            printf("Logged on to hte server, client id: %d\n", client_id);
+            break;
+        case STOP:
+            printf("Server not responding...\nClosing programe\n");
+            exit(0);
+            break;
+        case PING:
+            send_message(PING, "", -1);
+            break;
+        default:
+            printf("\n[%s] Message recieved %s, from client: %s, type: %s\n", msg.date, msg.msg_text, msg.client_name, get_message_type(msg.msg_type));
+            break;
+        }
+    }
+}
+
+int main(int argc, char** argv)
+{
+    if(argc!=4){
+        printf("Incorrect argumetns!\n");
+        return 1;
+    }
+    name = argv[1];
+    ip_adress = argv[2];
+    port_no = atoi(argv[3]);
+    if(port_no == 0){
+        printf("Port must be a numebr\n");
+        return 1;
+    }
+    atexit(customExit);
+    signal(SIGINT, signal_handler);
+
+    socket_1 = create_socket_client(SOCK_STREAM, inet_addr(ip_adress));
+    if(socket_1 == -1){
+        return 1;
+    }
+    pthread_t client_thread;
+    pthread_create(&client_thread, (void *)NULL, client_thread_handler, (void *)NULL);
+
+    int flag = 0;
+    ClientCommand command = 0;
+    char buff[MAX_MESSAGE_SIZE];
+    char *content;
+    int to_send_id;
+    int counter = 0;
+    
+
+    while(!is_accepted && counter < 10){
+        sleep(1);
+        counter++;
+    }
+    if(!is_accepted){
+        printf("Server not responding\n");
+        exit(0);
+    }
+    while (command != COMMAND_STOP)
+    {
+        print("ENTER A COMMAND: ('HELP' to get available commands)\n");
+        command = get_user_command(buff);
+        switch (command)
+        {
+        case COMMAND_STOP:
+            flag = 1;
+            Message msg;
+            msg.msg_type = STOP;
+            msg.from_id = client_id;
+            write(socket_1, &msg, sizeof(Message));
+            break;
+
+        case COMMAND_INVALID:
+            printf("Invalid command (you may enter help for command list)\n");
+            break;
+
+        case COMMAND_HELP:
+            printHelp();
+            break;
+
+        case COMMAND_LIST:
+            send_message(LIST, "", -1);
+            break;
+
+        case COMMAND_2ALL:
+            send_message(TO_ALL, &buff[5], -1);
+            break;
+
+        case COMMAND_2ONE:
+            content = strstr(buff, " ");
+            to_send_id = atoi(content);
+            content = strstr(content, &content[1]);
+            content = strstr(content, " ");
+            content = strstr(content, &content[1]);
+            send_message(TO_ONE, content, to_send_id);
+            break;
+
+        default:
+            break;
+        }
+        if (flag)
+            break;
+    }
+    printf("Client exiting\n");
+    exit(0);
+    return 0;
 }

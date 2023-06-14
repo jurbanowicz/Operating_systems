@@ -1,212 +1,276 @@
 #include "common.h"
-#include "message.h"
-#include <pthread.h>
 
-#define MAX_CONN 16
-#define PING_INTERVAL 20
+#define MAX_CLIENTS 16
+#define PING_INTERVAL 10
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t client_activity_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t client_no_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int epoll_fd;
+static int next_id = 0;
+static int server_close = 0;
+static int socket_1;
+int port;
+static int clients[MAX_CLIENTS];
+static int client_activity[MAX_CLIENTS];
+static int clients_no = 0;
+FILE *message_history;
 
-struct client {
-  int fd;
-  enum client_state { empty = 0, init, ready } state;
-  char nickname[16];
-  char symbol;
-  struct game_state* game_state;
-  bool responding;
-} clients[MAX_CONN];
-typedef struct client client;
+int create_server_socket(int type, in_addr_t addr_t)
+{
+    int main_socket;
+    struct sockaddr_in server;
+    memset(&server, 0, sizeof(struct sockaddr_in));
+    server.sin_family = AF_INET;
+    serve1r.sin_port = htons(port);
+    server.sin_addr.s_addr = addr_t;
 
-typedef struct event_data {
-  enum event_type { socket_event, client_event } type;
-  union payload { client* client; int socket; } payload;
-} event_data;
-
-void delete_client(client* client) {
-  printf("Deleting %s\n", client->nickname);
-  client->state = empty;
-  client->nickname[0] = 0;
-  epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client->fd, NULL);
-  close(client->fd);
-}
-
-void send_msg(client* client, message_type type, char text[MSG_LEN]) {
-  message msg;
-  msg.type = type;
-  memcpy(&msg.text, text, MSG_LEN*sizeof(char));
-  write(client->fd, &msg, sizeof(msg));
-}
-
-void on_client_message(client* client) {
-  if (client->state == init) {
-    int nick_size = read(client->fd, client->nickname, sizeof client->nickname - 1);
-    int j = client - clients;
-    pthread_mutex_lock(&mutex);
-    if (find(int i = 0; i < MAX_CONN; i++, i != j && strncmp(client->nickname, clients[i].nickname, sizeof clients->nickname) == 0) == -1) {
-      client->nickname[nick_size] = '\0';
-      client->state = ready;
-      printf("New client %s\n", client->nickname);
-    } 
-    else {
-      message msg = { .type = msg_username_taken };
-      printf("Nickname %s already taken\n", client->nickname);
-      write(client->fd, &msg, sizeof msg);
-      strcpy(client->nickname, "new client");
-      delete_client(client); // username taken
+    main_socket = socket(AF_INET, type, 0);
+    if (main_socket == -1)
+    {
+        fprintf(stderr, "Error creating socket\n");
+        return -1;
     }
-    pthread_mutex_unlock(&mutex);
-  }
-  else {
-    message msg;
-    read(client->fd, &msg, sizeof msg);
+    int status = bind(mainSocket, (struct sockaddr *)&ser, sizeof ser);
 
-    printf("Got msg %i %s\n", (int)msg.type, msg.text);
-
-    if (msg.type == msg_ping) {
-      pthread_mutex_lock(&mutex);
-      printf("pong %s\n", client->nickname);
-      client->responding = true;
-      pthread_mutex_unlock(&mutex);
-    } else if (msg.type == msg_disconnect || msg.type == msg_stop) {
-      pthread_mutex_lock(&mutex);
-      delete_client(client);
-      pthread_mutex_unlock(&mutex);
-    } else if (msg.type == msg_tall) {
-      char out[256] = "";
-      strcat(out, client->nickname);
-      strcat(out, ": ");
-      strcat(out, msg.text);
-
-      for (int i = 0; i < MAX_CONN; i++) {
-        if (clients[i].state != empty)
-          send_msg(clients+i, msg_get, out);
-      }
-    } else if (msg.type == msg_list) {
-      for (int i = 0; i < MAX_CONN; i++) {
-        if (clients[i].state != empty)
-          send_msg(client, msg_get, clients[i].nickname);
-      }
-    } else if (msg.type == msg_tone) {
-      char out[256] = "";
-      strcat(out, client->nickname);
-      strcat(out, ": ");
-      strcat(out, msg.text);
-
-      for (int i = 0; i < MAX_CONN; i++) {
-        if (clients[i].state != empty) {
-          if (strcmp(clients[i].nickname, msg.other_nickname) == 0) {
-            send_msg(clients+i, msg_get, out);
-          }
-        }
-      }
-    } 
-  }
-}
-
-void init_socket(int socket, void* addr, int addr_size) {
-  safe (bind(socket, (struct sockaddr*) addr, addr_size));
-  safe (listen(socket, MAX_CONN));
-  struct epoll_event event = { .events = EPOLLIN | EPOLLPRI };
-  event_data* event_data = event.data.ptr = malloc(sizeof *event_data);
-  event_data->type = socket_event;
-  event_data->payload.socket = socket;
-  epoll_ctl(epoll_fd, EPOLL_CTL_ADD, socket, &event);
-}
-
-client* new_client(int client_fd) {
-  pthread_mutex_lock(&mutex);
-  int i = find(int i = 0; i < MAX_CONN; i++, clients[i].state == empty);
-  if (i == -1) return NULL;
-  client* client = &clients[i];
-
-  client->fd = client_fd;
-  client->state = init;
-  client->responding = true;
-  pthread_mutex_unlock(&mutex);
-  return client;
-}
-
-void* ping(void* _) {
-  static message msg = { .type = msg_ping };
-  loop {
-    sleep(PING_INTERVAL);
-    pthread_mutex_lock(&mutex);
-    printf("Pinging clients\n");
-    for (int i = 0; i < MAX_CONN; i++) {
-      if (clients[i].state != empty) {
-        if (clients[i].responding) {
-          clients[i].responding = false;
-          write(clients[i].fd, &msg, sizeof msg);
-        }
-        else delete_client(&clients[i]);
-      }
+    if (status == -1)
+    {
+        fprintf(stderr, "Error binding socket\n");
+        return -2;
     }
-    pthread_mutex_unlock(&mutex);
-  }
+    return main_socket;
 }
 
-int main(int argc, char** argv) {
-  if (argc != 3) {
-    print("Usage [port] [path]\n");
+void init_clients_arrays() {
+    for (int i = 0 i < MAX_CLIENTS; i++) {
+        clients[i] = -1;
+        client_activity[i] = 0;
+    }
+}
+
+void init_client(int client_id) {
+    Message msg;
+    msg.msg_type = INIT;
+    msg.client_id = client_id;
+    pthread_mutex_lock(&client_mutex);
+    write(clients[client_id], &msg, sizeof(msg));
+    pthread_mutex_unlock(&client_mutex);
+}
+
+void handle_sigint(int signo) {
+    Message msg;
+    msg.msg_type = STOP;
+    pthread_mutex_lock(&client_mutex);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i] != -1) {
+        write(clients[i], &msg, sizeof(msg));
+        }
+    }
+    pthread_mutex_unlock(&client_mutex);
+    fprintf("Server closing...\n");
     exit(0);
-  }
-  int port = atoi(argv[1]);
-  char* socket_path = argv[2];
-
-  epoll_fd = safe (epoll_create1(0));
-
-  struct sockaddr_un local_addr = { .sun_family = AF_UNIX };
-  strncpy(local_addr.sun_path, socket_path, sizeof local_addr.sun_path);
-
-  struct sockaddr_in web_addr = {
-    .sin_family = AF_INET, .sin_port = htons(port),
-    .sin_addr = { .s_addr = htonl(INADDR_ANY) },
-  };
-
-  unlink(socket_path);
-  int local_sock = safe (socket(AF_UNIX, SOCK_STREAM, 0));
-  init_socket(local_sock, &local_addr, sizeof local_addr);
-
-  int web_sock = safe (socket(AF_INET, SOCK_STREAM, 0));
-  init_socket(web_sock, &web_addr, sizeof web_addr);
-
-  pthread_t ping_thread;
-  pthread_create(&ping_thread, NULL, ping, NULL);
-
-  printf("Server listening on *:%d and '%s'\n", port, socket_path);
-
-  struct epoll_event events[10];
-  loop {
-    int nread = safe (epoll_wait(epoll_fd, events, 10, -1));
-    repeat (nread) {
-      event_data* data = events[i].data.ptr;
-      if (data->type == socket_event) { // new conenction
-        int client_fd = accept(data->payload.socket, NULL, NULL);
-        client* client = new_client(client_fd);
-        if (client == NULL) {
-          printf("Server is full\n");
-          message msg = { .type = msg_server_full };
-          write(client_fd, &msg, sizeof msg);
-          close(client_fd); 
-          continue;
-        }
-
-        event_data* event_data = malloc(sizeof(event_data));
-        event_data->type = client_event;
-        event_data->payload.client = client;
-        struct epoll_event event = { .events = EPOLLIN | EPOLLET | EPOLLHUP, .data = { event_data } };
-
-        safe (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event));
-      } else if (data->type == client_event) {
-        if (events[i].events & EPOLLHUP) {
-          pthread_mutex_lock(&mutex);
-          delete_client(data->payload.client);
-          pthread_mutex_unlock(&mutex);
-        }
-        else on_client_message(data->payload.client);
-      }
-    }
-  }
 }
+
+void *ping_clients(void *arg) {
+    while (1) {
+        sleep(PING_INTERVAL);
+        for (int i = 0; i < MAX_CLIENTS; i++)
+        {
+            client_activity[i] = 0;
+        }
+        Message msg;
+        msg.msg_type = PING;
+        pthread_mutex_lock(&client_mutex);
+        for (int i = 0; i < MAX_CLIENTS; i++)
+        {
+        if (clients[i] != -1) {
+            write(clients[i], &msg, sizeof(msg));
+        }
+        }
+        pthread_mutex_unlock(&client_mutex);
+        sleep(PING_INTERVAL);
+
+        msg.msg_type = STOP;
+        pthread_mutex_lock(&client_mutex);
+        pthread_mutex_lock(&client_activity_mutex);
+
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if(clients[i] != -1 && clientActivity[i] == 0) {
+                pthread_mutex_lock(&client_no_mutex);
+                clients_no--;
+                pthread_mutex_unlock(&client_no_mutex);
+                clients[i] = -1;
+                write(clients[i], &msg, sizeof(msg));
+                printf("Client %d has been disconnected - not responding\n", i);
+            }
+        }
+        pthread_mutex_unlock(&client_activity_mutex);
+        pthread_mutex_unlock(&client_mutex);
+        pthread_mutex_lock(&client_no_mutex);
+        if (clients_no == 0) {
+        pthread_mutex_unlock(&client_no_mutex);
+        exit(0);
+        }
+        pthread_mutex_unlock(&client_no_mutex);
+    }
+}
+
+void write_to_file(int client_id, MessageType type) {
+    time_t curr_time = time(NULL);
+    struct tm loc_time = *localtime(&curr_time);
+    char buff[MAX_MESSAGE_SIZE / 2], to_save[MAX_MESSAGE_SIZE];
+    snprintf(buff, MESSAGE_TEXT_SIZE / 2, "%02d:%02d:%02d", loc_time.tm_hour, loc_time.tm_min, loc_time.tm_sec);
+    snprintf(to_save, MESSAGE_TEXT_SIZE, "ClientID: %d, type: %s, time: %s\n", client_id, get_message_type(type), buff);
+    fwrite(to_save, sizeof(char), strlen(to_save), message_history);
+}
+
+void send_message_to_client(int id, MessageType type, char *text, int sender_id, char* client_name)
+{
+    Message msg;
+    time_t curr_time = time(NULL);
+    struct tm loc_time = *localtime(&t);
+    snprintf(msg.date, MAX_MESSAGE_SIZE, "%02d:%02d:%02d", loc_time.tm_hour, loc_time.tm_min, loc_time.tm_sec);
+    msg.msg_type = type;
+    msg.from_id = sender_id;
+    msg.to_id = id;
+    strcpy(msg.client_name, client_name);
+    strcpy(msg.msg_text, text);
+    pthread_mutex_lock(&client_mutex);
+    write(clients[id], &msg, sizeof(msg));
+    pthread_mutex_unlock(&client_mutex);
+}
+
+
+void *client_handler(void *arg) {
+    pthread_mutex_lock(&client_no_mutex);
+    clients_no++;
+    pthread_mutex_unlock(&client_no_mutex);
+    ClientThreadArgs *args = (ClientThreadArgs *)arg;
+    int id =  args->client_id;
+    int client_socket = args->socket_no;
+    int client_close = 0;
+    Message msg;
+    while (!client_close) {
+        read(client_socket, &msg, sizeof(Message));
+        write_to_file(id, msg.msg_type);
+        switch (msg.msg_type) {
+        case STOP:
+            pthread_mutex_lock(&client_mutex);
+            clients[id] = -1;
+            pthread_mutex_unlock(&client_mutex);
+            client_close = 1;
+            printf("User %d disconnected from the server - logged out\n");
+            break;  
+
+        case LIST:
+            pthread_mutex_lock(&client_mutex);
+            printf("List of clinets: \n");
+            for (int i = 0; i < MAX_CLIENTS; i++) {
+                if (clients[i] != -1) {
+                    printf("Client %d\n", i);
+                }
+            }
+            pthread_mutex_unlock(&clients_mutex);
+            break;
+
+        case TO_ONE:
+            pthread_mutex_lock(&clients_mutex);
+            if (clients[msg.to_id] != -1)
+            {
+                pthread_mutex_unlock(&client_mutex);
+                send_message_to_client(msg.to_id, TO_ONE, msg.content, id, msg.client_name);
+            }
+            else
+            {
+                pthread_mutex_unlock(&client_mutex);
+            }
+            break;
+        case TO_ALL:
+            for (int i = 0; i < MAX_CLIENTS; i++) {
+                pthread_mutex_lock(&client_mutex);
+                if (clients[i] != -1 && i != id) {
+                    pthread_mutex_unlock(&client_mutex);
+                    send_message_to_client(i, TO_ALL, msg.content, id, msg.clientName);
+                } else {
+                    pthread_mutex_unlock(&client_mutex);
+                }
+            }
+            break;
+
+        case PING:
+            pthread_mutex_lock(&client_activity_mutex);
+            client_activity[msg.from_id] = 1;
+            pthread_mutex_unlock(&client_activity_mutex);
+            break;
+
+        default:
+            break;
+        }
+
+    }
+}
+
+
+void my_exit() {
+    fclose(message_history);
+    close(socket);
+}
+
+int main(int argc, char** argv)
+{
+    if (argc != 2){
+        printf("Incorrect arguments\n");
+        return 1;
+    }
+    port = atoi(argv[1]);
+    if(port == 0){
+        printf("port must be a numebr\n");
+        return 1;
+    }
+
+    atexit(my_exit)
+    init_clients_arrays();
+
+    signal(SIGINT, handle_sigint);
+    int status, socket_2;
+    pthread_t client_pinger;
+    message_history = fopen("logs.txt", "w");
+
+    socket_1 = create_server_socket(SOCK_STREAM, htonl(INADDR_ANY));
+
+    status = listen(socket_1, 10);
+    if (status == -1) {
+        fprintf(stderr, "Error while creating queue\n");
+        exit(1);
+    }
+
+    pthread_create(&client_pinger, NULL, ping_clients, (void *)NULL );
+
+    
+
+    while (!server_close) {
+        socket_2 = accept(socket_1, NULL, NULL);
+
+        if (socket_2 == -1) {
+        fprintf(stderr, "Error accepting\n");
+        exit(1);
+        }
+        if (next_id == 16) {
+        close(socket_2);
+        continue;
+        } 
+        pthread_mutex_lock(&client_mutex);
+        clients[next_id] = socket_2;
+        printf("Client %d connected to the server\n", next_id);
+        pthread_mutex_unlock(&client_mutex);
+        init_client(next_id)
+
+        pthread_t client_thread;
+        ClientThreadArgs args = {next_id, socket_2};
+        pthread_create(&client, NULL, client_handler, (void *)&args );
+        next_id++;
+    }
+    exit(0);
+    return 0;
+}
+
