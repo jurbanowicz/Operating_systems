@@ -20,7 +20,7 @@ int create_socket_client(int type) {
     return main_socket;
 }
 
-ClientCommand get_user_command(char *buff) {
+enum ClientCommand get_user_command(char *buff) {
     fgets(buff, MAX_MESSAGE_SIZE, stdin);
     buff[strlen(buff) - 1] = '\0';
     if (strcmp(buff, "LIST") == 0) { return COMMAND_LIST; }
@@ -46,17 +46,17 @@ void my_exit() {
 
 void send_message(MessageType type, char *text, int to_id) {
     Message msg;
-    msg.from_id = clientID;
+    msg.from_id = client_id;
     msg.msg_type = type;
     msg.to_id = to_id;
     strcpy(msg.client_name, name);
     strcpy(msg.msg_text, text);
-    sendto(socket_1, &msg, sizeof(msg), 0, (struct sockaddr *)&ser, sizeof(ser))
+    sendto(socket_1, &msg, sizeof(msg), 0, (struct sockaddr *)&ser, sizeof(ser));
 }
 
 void signal_handler(int signo) {
     Message msg;
-    msg.type = STOP;
+    msg.msg_type = STOP;
     sendto(socket_1, &msg, sizeof(msg), 0, (struct sockaddr *)&ser, sizeof(ser));
     printf("User logging out...\n");
     exit(0);
@@ -73,10 +73,10 @@ void *client_thread_handler(void *arg) {
             printf("Server not responding...\nClosing programe\n");
             exit(0);
         }
-        switch (msg.type)
+        switch (msg.msg_type)
         {
         case INIT:
-            client_id = msg.intValue;
+            client_id = msg.client_id;
             is_accepted = 1;
             printf("Logged on to hte server, client id: %d\n", client_id);
             break;
@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
         printf("Port must be a numebr\n");
         return 1;
     }
-    atexit(customExit);
+    atexit(my_exit);
     signal(SIGINT, signal_handler);
 
     socket_1 = create_socket_client(SOCK_DGRAM);
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
     pthread_create(&client_thread, (void *)NULL, client_thread_handler, (void *)NULL);
 
     int flag = 0;
-    ClientCommand command = 0;
+    enum ClientCommand command = 0;
     char buff[MAX_MESSAGE_SIZE];
     char *content;
     int to_send_id;
@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
     }
     while (command != COMMAND_STOP)
     {
-        print("ENTER A COMMAND: ('HELP' to get available commands)\n");
+        printf("ENTER A COMMAND: ('HELP' to get available commands)\n");
         command = get_user_command(buff);
         switch (command)
         {
@@ -158,7 +158,7 @@ int main(int argc, char** argv) {
             break;
 
         case COMMAND_HELP:
-            printHelp();
+            print_help();
             break;
 
         case COMMAND_LIST:

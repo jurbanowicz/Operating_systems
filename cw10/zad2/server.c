@@ -14,7 +14,7 @@ static int socket_1;
 int port;
 static int clients[MAX_CLIENTS];
 static int client_activity[MAX_CLIENTS];
-static struct sockaddr_in clients_data[MAX_CLIENTS];
+static struct sockaddr_in clients_data[MAX_CLIENTS] = {{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}};
 static int clients_no = 0;
 FILE *message_history;
 
@@ -40,10 +40,9 @@ int create_server_socket(int type) {
 }
 
 void init_clients_arrays() {
-    for (int i = 0 i < MAX_CLIENTS; i++) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
         clients[i] = -1;
         client_activity[i] = 0;
-        clients_data[i] = {};
     }
 }
 
@@ -52,7 +51,7 @@ void init_client(int id) {
     msg.msg_type = INIT;
     msg.client_id = id;
     pthread_mutex_lock(&clients_mutex);
-    sendto(socket_1, &msg, sizeof(msg), 0, (struct sockaddr*) &clientsData[id], sizeof(clients_data[id]));
+    sendto(socket_1, &msg, sizeof(msg), 0, (struct sockaddr*) &clients_data[id], sizeof(clients_data[id]));
     pthread_mutex_unlock(&clients_mutex);
 }
 
@@ -66,7 +65,7 @@ void handle_sigint(int signo) {
         }
     }
     pthread_mutex_unlock(&clients_mutex);
-    fprintf("Server closing...\n");
+    printf("Server closing...\n");
     exit(0);
 }
 
@@ -92,7 +91,7 @@ void *ping_clients(void *arg) {
         pthread_mutex_lock(&client_activity_mutex);
 
         for (int i = 0; i < MAX_CLIENTS; i++) {
-            if(clients[i] != -1 && clientActivity[i] == 0) {
+            if(clients[i] != -1 && client_activity[i] == 0) {
                 pthread_mutex_lock(&client_no_mutex);
                 clients_no--;
                 pthread_mutex_unlock(&client_no_mutex);
@@ -116,24 +115,24 @@ void write_to_file(int client_id, MessageType type) {
     time_t curr_time = time(NULL);
     struct tm loc_time = *localtime(&curr_time);
     char buff[MAX_MESSAGE_SIZE / 2], to_save[MAX_MESSAGE_SIZE];
-    snprintf(buff, MESSAGE_TEXT_SIZE / 2, "%02d:%02d:%02d", loc_time.tm_hour, loc_time.tm_min, loc_time.tm_sec);
-    snprintf(to_save, MESSAGE_TEXT_SIZE, "ClientID: %d, type: %s, time: %s\n", client_id, get_message_type(type), buff);
+    snprintf(buff, MAX_MESSAGE_SIZE / 2, "%02d:%02d:%02d", loc_time.tm_hour, loc_time.tm_min, loc_time.tm_sec);
+    snprintf(to_save, MAX_MESSAGE_SIZE, "ClientID: %d, type: %s, time: %s\n", client_id, get_message_type(type), buff);
     fwrite(to_save, sizeof(char), strlen(to_save), message_history);
 }
 
 void send_message_to_client(int id, MessageType type, char *text, int sender_id, char* client_name) {
     Message msg;
     time_t curr_time = time(NULL);
-    struct tm loc_time = *localtime(&t);
+    struct tm loc_time = *localtime(&curr_time);
     snprintf(msg.date, MAX_MESSAGE_SIZE, "%02d:%02d:%02d", loc_time.tm_hour, loc_time.tm_min, loc_time.tm_sec);
     msg.msg_type = type;
     msg.from_id = sender_id;
     msg.to_id = id;
     strcpy(msg.client_name, client_name);
     strcpy(msg.msg_text, text);
-    pthread_mutex_lock(&client_mutex);
+    pthread_mutex_lock(&clients_mutex);
     sendto(socket_1, &msg, sizeof(msg), 0 ,(struct sockaddr*) &clients_data[id], sizeof(clients_data[id]));
-    pthread_mutex_unlock(&client_mutex);
+    pthread_mutex_unlock(&clients_mutex);
 }
 
 
@@ -151,15 +150,15 @@ void *client_handler(void *arg) {
         write_to_file(id, msg.msg_type);
         switch (msg.msg_type) {
         case STOP:
-            pthread_mutex_lock(&client_mutex);
+            pthread_mutex_lock(&clients_mutex);
             clients[id] = -1;
-            pthread_mutex_unlock(&client_mutex);
+            pthread_mutex_unlock(&clients_mutex);
             client_close = 1;
-            printf("User %d disconnected from the server - logged out\n");
+            printf("User %d disconnected from the server - logged out\n", id);
             break;  
 
         case LIST:
-            pthread_mutex_lock(&client_mutex);
+            pthread_mutex_lock(&clients_mutex);
             printf("List of clinets: \n");
             for (int i = 0; i < MAX_CLIENTS; i++) {
                 if (clients[i] != -1) {
@@ -174,7 +173,7 @@ void *client_handler(void *arg) {
             if (clients[msg.to_id] != -1)
             {
                 pthread_mutex_unlock(&clients_mutex);
-                send_message_to_client(msg.to_id, TO_ONE, msg.content, id, msg.client_name);
+                send_message_to_client(msg.to_id, TO_ONE, msg.msg_text, id, msg.client_name);
             }
             else
             {
@@ -186,7 +185,7 @@ void *client_handler(void *arg) {
                 pthread_mutex_lock(&clients_mutex);
                 if (clients[i] != -1 && i != id) {
                     pthread_mutex_unlock(&clients_mutex);
-                    send_message_to_client(i, TO_ALL, msg.content, id, msg.clientName);
+                    send_message_to_client(i, TO_ALL, msg.msg_text, id, msg.client_name);
                 } else {
                     pthread_mutex_unlock(&clients_mutex);
                 }
@@ -209,21 +208,21 @@ void *client_handler(void *arg) {
 
 void my_exit() {
     fclose(message_history);
-    close(socket);
+    close(socket_1);
 }
 
 int main(int argc, char** argv) {
-    if (argc != 2){
+    if (argc != 2) {
         printf("Incorrect arguments\n");
         return 1;
     }
     port = atoi(argv[1]);
-    if (port == 0){
+    if (port == 0) {
         printf("port must be a numebr\n");
         return 1;
     }
 
-    atexit(my_exit)
+    atexit(my_exit);
     init_clients_arrays();
 
     signal(SIGINT, handle_sigint);
@@ -236,97 +235,91 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    pthread_create(&client_pinger, NULL, client_handler, (void *)NULL);
+    pthread_create(&client_pinger, NULL, client_handler, (void *) NULL);
 
     Message msg;
     int income;
     int server_close = 0;
-    while (!server_close)
-    {
+    while (!server_close) {
         struct sockaddr_in cli;
         int dlugosc = sizeof cli;
-        income = recvfrom(socket_1, &msg, sizeof(Message), 0, (struct sockaddr*)&cli, (socklen_t*) &dlugosc);
-        if(income == 0) {
+        income = recvfrom(socket_1, &msg, sizeof(Message), 0, (struct sockaddr *) &cli, (socklen_t * ) & dlugosc);
+        if (income == 0) {
             continue;
         }
         write_to_file(msg.from_id, msg.msg_type);
-        switch (msg.msg_type)
-        {
-        case INIT:
-            if(next_id==10){
-                continue;
-            }
-            pthread_mutex_lock(&client_no_mutex);
-            clients_no++;
-            pthread_mutex_unlock(&client_no_mutex);
-            pthread_mutex_lock(&clients_mutex);
-            clients[next_id] = 1;
-            clientsData[next_id] = cli;
-            pthread_mutex_unlock(&clients_mutex);
-            send_initial_message(next_id);
-            printf("Client %d connected to the server\n", next_id);
-            next_id++;
-            break; 
-        case STOP:
-            printf("Client %d disconnecting from the server\n", msg.from_id);
-            pthread_mutex_lock(&clients_mutex);
-            clients[msg.from_id] = -1;
-            pthread_mutex_unlock(&clients_mutex);
-            pthread_mutex_lock(&client_no_mutex);
-            clients_no--;
-            if (clients_no == 0)
-            {
+        switch (msg.msg_type) {
+            case INIT:
+                if (next_id == 10) {
+                    continue;
+                }
+                pthread_mutex_lock(&client_no_mutex);
+                clients_no++;
                 pthread_mutex_unlock(&client_no_mutex);
-                server_close = 1;
-                exit(0);
-            } else {
-                pthread_mutex_unlock(&client_no_mutex);
-            }
-            break;
-        case TO_ONE:
-            pthread_mutex_lock(&clients_mutex);
-            if (clients[msg.to_id] != -1) {
-                pthread_mutex_unlock(&clients_mutex);
-                send_message_to_client(msg.to_id, TO_ONE, msg.msg_text, msg.from_id, msg.client_name);
-            } else {
-                pthread_mutex_unlock(&clients_mutex);
-            }
-            break;
-        case TO_ALL:
-
-            for (int i = 0; i < MAX_CLIENTS; i++)
-            {
                 pthread_mutex_lock(&clients_mutex);
-                if (clients[i] != -1 && i != msg.from_id)
-                {
+                clients[next_id] = 1;
+                clients_data[next_id] = cli;
+                pthread_mutex_unlock(&clients_mutex);
+                init_client(next_id);
+                printf("Client %d connected to the server\n", next_id);
+                next_id++;
+                break;
+            case STOP:
+                printf("Client %d disconnecting from the server\n", msg.from_id);
+                pthread_mutex_lock(&clients_mutex);
+                clients[msg.from_id] = -1;
+                pthread_mutex_unlock(&clients_mutex);
+                pthread_mutex_lock(&client_no_mutex);
+                clients_no--;
+                if (clients_no == 0) {
+                    pthread_mutex_unlock(&client_no_mutex);
+                    server_close = 1;
+                    exit(0);
+                } else {
+                    pthread_mutex_unlock(&client_no_mutex);
+                }
+                break;
+            case TO_ONE:
+                pthread_mutex_lock(&clients_mutex);
+                if (clients[msg.to_id] != -1) {
                     pthread_mutex_unlock(&clients_mutex);
-                    send_message_to_client(i, TYPE_TO_ALL, msg.msg_text, msg.from_id, msg.client_name);  
+                    send_message_to_client(msg.to_id, TO_ONE, msg.msg_text, msg.from_id, msg.client_name);
                 } else {
                     pthread_mutex_unlock(&clients_mutex);
                 }
-            }
-            break;
-        case LIST:
-            pthread_mutex_lock(&clients_mutex);
-            printf("List of clinets: \n");
-            for (int i = 0; i < MAX_CLIENTS; i++) {
-                if (clients[i] != -1) {
-                    printf("Client %d\n", i);
-                }
-            }
-            pthread_mutex_unlock(&clients_mutex);
-            break;
-        case PING:
-            pthread_mutex_lock(&client_activity_mutex);
-            client_activity[msg.from_id] = 1;
-            pthread_mutex_unlock(&client_activity_mutex);
-            break;
-        default:
+                break;
+            case TO_ALL:
 
-            break;
+                for (int i = 0; i < MAX_CLIENTS; i++) {
+                    pthread_mutex_lock(&clients_mutex);
+                    if (clients[i] != -1 && i != msg.from_id) {
+                        pthread_mutex_unlock(&clients_mutex);
+                        send_message_to_client(i, TO_ALL, msg.msg_text, msg.from_id, msg.client_name);
+                    } else {
+                        pthread_mutex_unlock(&clients_mutex);
+                    }
+                }
+                break;
+            case LIST:
+                pthread_mutex_lock(&clients_mutex);
+                printf("List of clinets: \n");
+                for (int i = 0; i < MAX_CLIENTS; i++) {
+                    if (clients[i] != -1) {
+                        printf("Client %d\n", i);
+                    }
+                }
+                pthread_mutex_unlock(&clients_mutex);
+                break;
+            case PING:
+                pthread_mutex_lock(&client_activity_mutex);
+                client_activity[msg.from_id] = 1;
+                pthread_mutex_unlock(&client_activity_mutex);
+                break;
+            default:
+
+                break;
         }
     }
-
     exit(0);
     return 0;
 }

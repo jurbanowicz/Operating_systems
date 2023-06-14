@@ -22,7 +22,7 @@ int create_server_socket(int type, in_addr_t addr_t)
     struct sockaddr_in server;
     memset(&server, 0, sizeof(struct sockaddr_in));
     server.sin_family = AF_INET;
-    serve1r.sin_port = htons(port);
+    server.sin_port = htons(port);
     server.sin_addr.s_addr = addr_t;
 
     main_socket = socket(AF_INET, type, 0);
@@ -31,7 +31,7 @@ int create_server_socket(int type, in_addr_t addr_t)
         fprintf(stderr, "Error creating socket\n");
         return -1;
     }
-    int status = bind(mainSocket, (struct sockaddr *)&ser, sizeof ser);
+    int status = bind(main_socket, (struct sockaddr *)&server, sizeof server);
 
     if (status == -1)
     {
@@ -42,7 +42,7 @@ int create_server_socket(int type, in_addr_t addr_t)
 }
 
 void init_clients_arrays() {
-    for (int i = 0 i < MAX_CLIENTS; i++) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
         clients[i] = -1;
         client_activity[i] = 0;
     }
@@ -67,7 +67,7 @@ void handle_sigint(int signo) {
         }
     }
     pthread_mutex_unlock(&client_mutex);
-    fprintf("Server closing...\n");
+    printf("Server closing...\n");
     exit(0);
 }
 
@@ -95,7 +95,7 @@ void *ping_clients(void *arg) {
         pthread_mutex_lock(&client_activity_mutex);
 
         for (int i = 0; i < MAX_CLIENTS; i++) {
-            if(clients[i] != -1 && clientActivity[i] == 0) {
+            if(clients[i] != -1 && client_activity[i] == 0) {
                 pthread_mutex_lock(&client_no_mutex);
                 clients_no--;
                 pthread_mutex_unlock(&client_no_mutex);
@@ -119,8 +119,8 @@ void write_to_file(int client_id, MessageType type) {
     time_t curr_time = time(NULL);
     struct tm loc_time = *localtime(&curr_time);
     char buff[MAX_MESSAGE_SIZE / 2], to_save[MAX_MESSAGE_SIZE];
-    snprintf(buff, MESSAGE_TEXT_SIZE / 2, "%02d:%02d:%02d", loc_time.tm_hour, loc_time.tm_min, loc_time.tm_sec);
-    snprintf(to_save, MESSAGE_TEXT_SIZE, "ClientID: %d, type: %s, time: %s\n", client_id, get_message_type(type), buff);
+    snprintf(buff, MAX_MESSAGE_SIZE / 2, "%02d:%02d:%02d", loc_time.tm_hour, loc_time.tm_min, loc_time.tm_sec);
+    snprintf(to_save, MAX_MESSAGE_SIZE, "ClientID: %d, type: %s, time: %s\n", client_id, get_message_type(type), buff);
     fwrite(to_save, sizeof(char), strlen(to_save), message_history);
 }
 
@@ -128,7 +128,7 @@ void send_message_to_client(int id, MessageType type, char *text, int sender_id,
 {
     Message msg;
     time_t curr_time = time(NULL);
-    struct tm loc_time = *localtime(&t);
+    struct tm loc_time = *localtime(&curr_time);
     snprintf(msg.date, MAX_MESSAGE_SIZE, "%02d:%02d:%02d", loc_time.tm_hour, loc_time.tm_min, loc_time.tm_sec);
     msg.msg_type = type;
     msg.from_id = sender_id;
@@ -159,7 +159,7 @@ void *client_handler(void *arg) {
             clients[id] = -1;
             pthread_mutex_unlock(&client_mutex);
             client_close = 1;
-            printf("User %d disconnected from the server - logged out\n");
+            printf("User %d disconnected from the server - logged out\n", id);
             break;  
 
         case LIST:
@@ -170,15 +170,15 @@ void *client_handler(void *arg) {
                     printf("Client %d\n", i);
                 }
             }
-            pthread_mutex_unlock(&clients_mutex);
+            pthread_mutex_unlock(&client_mutex);
             break;
 
         case TO_ONE:
-            pthread_mutex_lock(&clients_mutex);
+            pthread_mutex_lock(&client_mutex);
             if (clients[msg.to_id] != -1)
             {
                 pthread_mutex_unlock(&client_mutex);
-                send_message_to_client(msg.to_id, TO_ONE, msg.content, id, msg.client_name);
+                send_message_to_client(msg.to_id, TO_ONE, msg.msg_text, id, msg.client_name);
             }
             else
             {
@@ -190,7 +190,7 @@ void *client_handler(void *arg) {
                 pthread_mutex_lock(&client_mutex);
                 if (clients[i] != -1 && i != id) {
                     pthread_mutex_unlock(&client_mutex);
-                    send_message_to_client(i, TO_ALL, msg.content, id, msg.clientName);
+                    send_message_to_client(i, TO_ALL, msg.msg_text, id, msg.client_name);
                 } else {
                     pthread_mutex_unlock(&client_mutex);
                 }
@@ -213,7 +213,7 @@ void *client_handler(void *arg) {
 
 void my_exit() {
     fclose(message_history);
-    close(socket);
+    close(socket_1);
 }
 
 int main(int argc, char** argv)
@@ -223,12 +223,12 @@ int main(int argc, char** argv)
         return 1;
     }
     port = atoi(argv[1]);
-    if(port == 0){
+    if(port == 0) {
         printf("port must be a numebr\n");
         return 1;
     }
 
-    atexit(my_exit)
+    atexit(my_exit);
     init_clients_arrays();
 
     signal(SIGINT, handle_sigint);
@@ -246,8 +246,6 @@ int main(int argc, char** argv)
 
     pthread_create(&client_pinger, NULL, ping_clients, (void *)NULL );
 
-    
-
     while (!server_close) {
         socket_2 = accept(socket_1, NULL, NULL);
 
@@ -263,11 +261,11 @@ int main(int argc, char** argv)
         clients[next_id] = socket_2;
         printf("Client %d connected to the server\n", next_id);
         pthread_mutex_unlock(&client_mutex);
-        init_client(next_id)
+        init_client(next_id);
 
         pthread_t client_thread;
         ClientThreadArgs args = {next_id, socket_2};
-        pthread_create(&client, NULL, client_handler, (void *)&args );
+        pthread_create(&client_thread, NULL, client_handler, (void *)&args );
         next_id++;
     }
     exit(0);
